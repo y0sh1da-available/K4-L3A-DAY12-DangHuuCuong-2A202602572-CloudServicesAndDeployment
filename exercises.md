@@ -82,7 +82,12 @@ phút đồng hồ (reset lúc giây 00), một người dùng có thể gửi t
 request trong 2 giây liên tiếp khi hạn mức là 10/phút? Giải thích cách đạt được
 con số đó.
 
-> *Câu trả lời của bạn*
+> - **Số request tối đa:** **20 request** trong 2 giây liên tiếp.
+> - **Cách đạt được:**
+>   - Cơ chế fixed window reset bộ đếm vào đúng giây `00` của mỗi phút.
+>   - Kẻ tấn công gửi dồn **10 request** vào giây cuối cùng của phút thứ nhất (lúc `10:00:59`). Bộ đếm ghi nhận 10/10 request (hợp lệ).
+>   - Ngay 1 giây sau đó (lúc `10:01:00`), đồng hồ nhảy sang phút mới và bộ đếm tự động reset về 0. Kẻ tấn công gửi tiếp **10 request** nữa. Bộ đếm ghi nhận 10/10 request cho phút mới (vẫn hợp lệ).
+>   - Kết quả: Có tới 20 request được thực hiện chỉ trong vòng 2 giây (từ 10:00:59 đến 10:01:00) — gấp đôi hạn mức 10 req/phút. Cửa sổ trượt (sliding window) khắc phục triệt để lỗ hổng này vì luôn tính tổng số request trong đúng 60 giây gần nhất tính từ thời điểm hiện tại.
 
 ---
 
@@ -91,7 +96,14 @@ con số đó.
 Hai cơ chế này khác nhau ở điểm nào? Cho một tình huống mà rate limit cho qua
 nhưng cost guard phải chặn, và một tình huống ngược lại.
 
-> *Câu trả lời của bạn*
+> - **Điểm khác nhau:**
+>   - **Rate Limit** giới hạn **số lượng request trong một khoảng thời gian ngắn** (ví dụ 10 req/phút) để chống nghẽn đường truyền, spam và từ chối dịch vụ (DoS), trả về mã `429 Too Many Requests`.
+>   - **Cost Guard** giới hạn **tổng chi phí tiền tệ / token trong một chu kỳ dài** (ví dụ $10/tháng/user) để kiểm soát ngân sách hóa đơn API LLM, trả về mã `402 Payment Required`.
+> - **Rate limit cho qua nhưng Cost guard phải chặn:**
+>   - User chỉ gửi 1 request/phút (hoàn toàn hợp lệ theo rate limit 10 req/phút), nhưng request đó đính kèm một file tài liệu khổng lồ (vài chục nghìn token) hoặc user đã tiêu dùng tới $9.99/$10 ngân sách tháng. Cost guard tính toán thấy chi phí vượt ngân sách còn lại nên trả về `402 Payment Required`.
+> - **Cost guard cho qua nhưng Rate limit phải chặn:**
+>   - User gửi các câu hỏi siêu ngắn ("hi", "test" tốn rất ít token, chi phí chỉ $0.00001, ngân sách tháng vẫn còn gần như nguyên vẹn $10). Tuy nhiên, user dùng script bắn liên tục 15 request trong 3 giây. Cost guard thấy còn tiền nên đồng ý, nhưng Rate limit phát hiện vượt quá 10 req/phút nên lập tức chặn lại bằng mã `429 Too Many Requests`.
+
 
 ---
 
