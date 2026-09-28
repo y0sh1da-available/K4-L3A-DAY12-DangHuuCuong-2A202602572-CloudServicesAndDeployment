@@ -6,7 +6,7 @@
 > Cách trả lời: thay dòng `> *Câu trả lời của bạn*` bằng câu trả lời.
 > `grade.py` đếm số câu đã trả lời (15 điểm cho 10 câu).
 >
-> Họ và tên: ..........................  Mã học viên: ..........................
+> Họ và tên: Đặng Hữu Cương  Mã học viên: 2A202602572
 
 ---
 
@@ -40,14 +40,18 @@ docker build -t agent:multi .
 docker images | grep agent
 ```
 
-| Bản | Dung lượng |
-|-----|-----------|
-| 1 stage (bản đầu) | ... MB |
-| Multi-stage | ... MB |
+
+| Bản                 | Dung lượng |
+| -------------------- | ------------ |
+| 1 stage (bản đầu) | 1.73 GB (1730 MB) |
+| Multi-stage          | 271 MB       |
 
 Giải thích: phần dung lượng chênh lệch đó là những gì?
 
-> *Câu trả lời của bạn*
+> Phần dung lượng chênh lệch chủ yếu gồm:
+> 1. Sự khác biệt giữa base image: `python:3.11` đầy đủ chứa toàn bộ hệ điều hành Debian với trình biên dịch C/C++ (gcc, g++, make), build tools, thư viện dev và các gói tiện ích không cần thiết; trong khi `python:3.11-slim` đã loại bỏ hoàn toàn các thành phần này.
+> 2. Cơ chế Multi-stage build tách biệt giai đoạn build và runtime: các công cụ cài đặt, file tạm thời, và cache của pip chỉ nằm ở stage `builder`, chỉ có kết quả packages đã hoàn thiện (`/install`) được copy sang stage `runtime`.
+> 3. File rác và cache cục bộ được loại bỏ nhờ `.dockerignore` chặt chẽ, không bị lọt vào layer image cuối cùng.
 
 ---
 
