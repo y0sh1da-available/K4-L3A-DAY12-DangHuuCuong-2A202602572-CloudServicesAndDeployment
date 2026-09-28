@@ -112,7 +112,12 @@ nhưng cost guard phải chặn, và một tình huống ngược lại.
 Nếu gộp hai endpoint làm một và cho nó kiểm tra Redis, chuyện gì xảy ra với cụm
 3 container khi Redis mất kết nối 30 giây? Trả lời theo đúng thứ tự sự kiện.
 
-> *Câu trả lời của bạn*
+> Thứ tự sự kiện xảy ra:
+> 1. **Redis mất kết nối:** Kết nối tới Redis bị gián đoạn tạm thời trong 30 giây.
+> 2. **Liveness check đồng loạt thất bại:** Orchestrator (Docker/K8s) định kỳ gọi endpoint healthcheck. Do endpoint kiểm tra cả Redis, cả 3 container agent đều phản hồi lỗi/unhealthy.
+> 3. **Restart Storm (Thảm họa restart hàng loạt):** Vì liveness probe thất bại, orchestrator kết luận rằng tiến trình app đã chết và lập tức ra lệnh restart cả 3 container cùng lúc.
+> 4. **Hệ thống sập hoàn toàn (CrashLoopBackOff / 100% Downtime):** Trong suốt 30 giây Redis chưa hồi phục, các container vừa khởi động lại tiếp tục bị kiểm tra thất bại và lại bị restart liên tục. Không có container nào sống để phục vụ người dùng.
+> 5. **Hậu quả so với việc tách probe:** Nếu tách riêng, `/ready` sẽ trả về 503 để Load Balancer tạm ngừng chuyển traffic vào container, trong khi `/health` vẫn trả về 200 để giữ container tiếp tục sống. Khi Redis có lại, hệ thống phục hồi ngay lập tức mà không phải khởi động lại container.
 
 ---
 
@@ -122,7 +127,11 @@ Chạy `docker compose up --scale agent=3` rồi gọi `/ask` nhiều lần vớ
 `X-User-Id`. Quan sát `history_length` trong response. Nếu lịch sử được lưu
 trong một dict Python thay vì Redis, bạn sẽ thấy con số đó thay đổi thế nào?
 
-> *Câu trả lời của bạn*
+> - **Khi lưu trong Redis (Stateless - hiện tại):** Con số `history_length` tăng dần đều đặn qua từng lượt hỏi (0 → 2 → 4 → 6...) dù request được Load Balancer điều phối vào bất kỳ container nào trong 3 container, vì cả 3 đều chia sẻ chung một cơ sở dữ liệu Redis.
+> - **Nếu lưu trong dict Python (Stateful trong RAM):**
+>   - Con số `history_length` sẽ **thay đổi bất thường, nhảy loạn xạ và không tăng đều** (ví dụ: lượt 1 vào A ra 0, lượt 2 vào B ra 0, lượt 3 vào A ra 2, lượt 4 vào C lại ra 0...).
+>   - **Nguyên nhân:** Mỗi container chạy trong một không gian bộ nhớ RAM độc lập, container B không thể nhìn thấy biến `dict` nằm trong RAM của container A hay C. Khi Load Balancer phân phối request xoay vòng (round-robin), người dùng sẽ thấy bot bị "mất trí nhớ ngẫu nhiên" tùy vào việc request rơi trúng container nào.
+
 
 ---
 
